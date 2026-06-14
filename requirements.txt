@@ -1,0 +1,15 @@
+# Descargador de Videos — Proyecto Ola Digital
+# Python 3.12 · Linux/Windows 64-bit
+
+# ── Core de la aplicación ──────────────────────
+flet==0.84.0
+yt-dlp==2026.3.17
+
+# ── Empaquetado ────────────────────────────────
+pyinstaller==6.20.0
+pyinstaller-hooks-contrib==2026.5
+
+# ── Dependencias principales ──────────────────
+requests==2.34.2
+urllib3==2.7.0
+rich==15.0.0
