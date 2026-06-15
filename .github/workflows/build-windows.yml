@@ -28,42 +28,30 @@ jobs:
           pip install requests==2.34.2 urllib3==2.7.0 rich==15.0.0
         shell: pwsh
 
-      - name: Pre-cachear runtime de Flet
-        shell: python
-        run: |
-          import urllib.request, zipfile, os
-          # Directorio donde Flet busca su runtime
-          flet_dir = os.path.join(os.path.expanduser('~'), '.flet', 'client', 'flet-desktop-full-0.84.0', 'flet')
-          os.makedirs(flet_dir, exist_ok=True)
-          if not os.listdir(flet_dir):
-              url = 'https://github.com/flet-dev/flet/releases/download/v0.84.0/flet-windows.zip'
-              tmp = os.path.join(os.environ.get('TEMP', '/tmp'), 'flet-windows.zip')
-              print('Descargando runtime de Flet...')
-              urllib.request.urlretrieve(url, tmp)
-              print('Extrayendo...')
-              with zipfile.ZipFile(tmp) as z:
-                  z.extractall(flet_dir)
-              print(f'Runtime extraido en: {flet_dir}')
-              print('Archivos:', os.listdir(flet_dir))
-          else:
-              print('Runtime ya existe, omitiendo descarga.')
-
-      - name: Descargar ffmpeg
+      - name: Descargar ffmpeg y runtime Flet
         shell: python
         run: |
           import urllib.request, zipfile, os, tempfile
+          # ffmpeg
           os.makedirs('assets/bin', exist_ok=True)
-          url = 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip'
-          tmp = os.path.join(tempfile.gettempdir(), 'ffmpeg.zip')
+          url_ff = 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip'
+          tmp_ff = os.path.join(tempfile.gettempdir(), 'ffmpeg.zip')
           print('Descargando ffmpeg...')
-          urllib.request.urlretrieve(url, tmp)
-          with zipfile.ZipFile(tmp) as z:
+          urllib.request.urlretrieve(url_ff, tmp_ff)
+          with zipfile.ZipFile(tmp_ff) as z:
               for n in z.namelist():
                   if n.endswith('bin/ffmpeg.exe') or n.endswith('bin/ffprobe.exe'):
                       exe = os.path.basename(n)
                       with z.open(n) as s, open(os.path.join('assets','bin',exe), 'wb') as d:
                           d.write(s.read())
                       print(f'  {exe}: OK')
+          # runtime Flet para incluir en bundle
+          os.makedirs('flet-runtime', exist_ok=True)
+          url_flet = 'https://github.com/flet-dev/flet/releases/download/v0.84.0/flet-windows.zip'
+          dst_flet = os.path.join('flet-runtime', 'flet-windows.zip')
+          print('Descargando runtime Flet...')
+          urllib.request.urlretrieve(url_flet, dst_flet)
+          print(f'  flet-windows.zip: {os.path.getsize(dst_flet)//1024//1024} MB OK')
 
       - name: Empaquetar con flet pack
         run: >
@@ -72,6 +60,7 @@ jobs:
           --distpath dist
           --icon assets/logo_POD.ico
           --add-data "assets;assets"
+          --add-data "flet-runtime;flet-runtime"
           --hidden-import yt_dlp
           --hidden-import yt_dlp.extractor
           --hidden-import yt_dlp.postprocessor

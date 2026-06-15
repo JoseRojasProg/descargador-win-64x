@@ -24,6 +24,43 @@ LOGO_PATH = os.path.join(_DIR_BASE, "assets", "logo_POD.png")
 ICON_PATH = os.path.join(_DIR_BASE, "assets", "logo_POD.ico")
 
 # ─────────────────────────────────────────────
+#  PRE-INSTALAR RUNTIME DE FLET DESDE EL BUNDLE
+# ─────────────────────────────────────────────
+
+
+def _instalar_flet_runtime():
+    """
+    Si el runtime de Flet no está en el caché del usuario,
+    lo extrae desde el zip incluido en el bundle.
+    Solo aplica cuando se corre como ejecutable empaquetado.
+    """
+    if not getattr(sys, 'frozen', False):
+        return  # En desarrollo no hace falta
+
+    import zipfile
+
+    FLET_VERSION = "0.84.0"
+    flet_cache = os.path.join(
+        os.path.expanduser("~"), ".flet", "client",
+        f"flet-desktop-full-{FLET_VERSION}", "flet"
+    )
+
+    if os.path.exists(flet_cache) and os.listdir(flet_cache):
+        return  # Ya instalado
+
+    # Buscar el zip del runtime dentro del bundle
+    runtime_zip = os.path.join(_DIR_BASE, "flet-runtime", "flet-windows.zip")
+    if not os.path.exists(runtime_zip):
+        return  # No incluido en el bundle, Flet intentará descargarlo
+
+    os.makedirs(flet_cache, exist_ok=True)
+    with zipfile.ZipFile(runtime_zip, 'r') as z:
+        z.extractall(flet_cache)
+
+
+_instalar_flet_runtime()
+
+# ─────────────────────────────────────────────
 #  UTILIDADES
 # ─────────────────────────────────────────────
 
