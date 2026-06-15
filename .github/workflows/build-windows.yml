@@ -19,14 +19,33 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Instalar dependencias
+      - name: Instalar dependencias Python
         run: |
           python -m pip install --upgrade pip
           pip install flet==0.84.0 flet-cli==0.84.0 flet-desktop==0.84.0
           pip install yt-dlp==2026.3.17
-          pip install pyinstaller==6.20.0 pyinstaller-hooks-contrib==2026.5
           pip install requests==2.34.2 urllib3==2.7.0 rich==15.0.0
         shell: pwsh
+
+      - name: Pre-cachear runtime de Flet
+        shell: python
+        run: |
+          import urllib.request, zipfile, os
+          # Directorio donde Flet busca su runtime
+          flet_dir = os.path.join(os.path.expanduser('~'), '.flet', 'client', 'flet-desktop-full-0.84.0', 'flet')
+          os.makedirs(flet_dir, exist_ok=True)
+          if not os.listdir(flet_dir):
+              url = 'https://github.com/flet-dev/flet/releases/download/v0.84.0/flet-windows.zip'
+              tmp = os.path.join(os.environ.get('TEMP', '/tmp'), 'flet-windows.zip')
+              print('Descargando runtime de Flet...')
+              urllib.request.urlretrieve(url, tmp)
+              print('Extrayendo...')
+              with zipfile.ZipFile(tmp) as z:
+                  z.extractall(flet_dir)
+              print(f'Runtime extraido en: {flet_dir}')
+              print('Archivos:', os.listdir(flet_dir))
+          else:
+              print('Runtime ya existe, omitiendo descarga.')
 
       - name: Descargar ffmpeg
         shell: python
@@ -37,7 +56,6 @@ jobs:
           tmp = os.path.join(tempfile.gettempdir(), 'ffmpeg.zip')
           print('Descargando ffmpeg...')
           urllib.request.urlretrieve(url, tmp)
-          print('Extrayendo...')
           with zipfile.ZipFile(tmp) as z:
               for n in z.namelist():
                   if n.endswith('bin/ffmpeg.exe') or n.endswith('bin/ffprobe.exe'):
@@ -45,7 +63,6 @@ jobs:
                       with z.open(n) as s, open(os.path.join('assets','bin',exe), 'wb') as d:
                           d.write(s.read())
                       print(f'  {exe}: OK')
-          print('ffmpeg listo.')
 
       - name: Empaquetar con flet pack
         run: >
@@ -66,7 +83,9 @@ jobs:
         shell: pwsh
 
       - name: Crear zip
-        run: Compress-Archive -Path dist/Descargador_Win64.exe -DestinationPath dist/Descargador_Win64.zip
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Compress-Archive -Path dist/Descargador_Win64.exe -DestinationPath dist/Descargador_Win64.zip
         shell: pwsh
 
       - name: Subir artifact
