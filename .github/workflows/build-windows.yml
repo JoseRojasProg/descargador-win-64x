@@ -45,24 +45,46 @@ jobs:
                           d.write(s.read())
                       print(f'  {exe}: OK')
 
-      - name: Empaquetar con flet pack --onedir
-        run: >
-          flet pack main.py
-          --name Descargador_Win64
-          --distpath dist
-          --icon assets/logo_POD.ico
-          --add-data "assets;assets"
-          --hidden-import yt_dlp
-          --hidden-import yt_dlp.extractor
-          --hidden-import yt_dlp.postprocessor
-          --product-name "Descargador de Videos POD"
-          --product-version "2.0.0"
-          --file-version "2.0.0"
-          --company-name "Proyecto Ola Digital"
-          --copyright "2026 Proyecto Ola Digital"
-          --file-description "Descargador de Videos - Proyecto Ola Digital"
-          --no-onefile
-        shell: pwsh
+      - name: Empaquetar onedir via PyInstaller directo
+        shell: python
+        run: |
+          import subprocess, sys, os
+
+          # Pre-cachear runtime de Flet
+          import urllib.request, zipfile, tempfile
+          flet_cache = os.path.join(os.path.expanduser('~'), '.flet', 'client',
+                                    'flet-desktop-full-0.84.0', 'flet')
+          os.makedirs(flet_cache, exist_ok=True)
+          if not os.listdir(flet_cache):
+              url = 'https://github.com/flet-dev/flet/releases/download/v0.84.0/flet-windows.zip'
+              tmp = os.path.join(tempfile.gettempdir(), 'flet-windows.zip')
+              print('Descargando runtime Flet...')
+              urllib.request.urlretrieve(url, tmp)
+              with zipfile.ZipFile(tmp) as z:
+                  z.extractall(flet_cache)
+              print(f'Runtime OK: {len(os.listdir(flet_cache))} archivos')
+
+          # Obtener ruta del runtime para incluirlo en el bundle
+          flet_dir = os.path.dirname(flet_cache)  # flet-desktop-full-0.84.0
+          flet_bin = flet_cache                     # .../flet-desktop-full-0.84.0/flet
+
+          # Llamar PyInstaller con --onedir e incluyendo el runtime de Flet
+          import PyInstaller.__main__
+          PyInstaller.__main__.run([
+              'main.py',
+              '--noconfirm',
+              '--noconsole',
+              '--onedir',
+              '--name', 'Descargador_Win64',
+              '--distpath', 'dist',
+              '--icon', 'assets/logo_POD.ico',
+              '--add-data', 'assets;assets',
+              '--add-data', f'{flet_bin};flet/flet',
+              '--hidden-import', 'yt_dlp',
+              '--hidden-import', 'yt_dlp.extractor',
+              '--hidden-import', 'yt_dlp.postprocessor',
+          ])
+          print('Build completado.')
 
       - name: Comprimir carpeta completa
         run: |
