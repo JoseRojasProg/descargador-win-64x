@@ -45,65 +45,28 @@ jobs:
                           d.write(s.read())
                       print(f'  {exe}: OK')
 
-      - name: Pre-cachear runtime Flet y empaquetar
-        shell: python
+      - name: Empaquetar con flet pack --onedir
+        run: >
+          flet pack main.py
+          --name Descargador_Win64
+          --distpath dist
+          --icon assets/logo_POD.ico
+          --add-data "assets;assets"
+          --hidden-import yt_dlp
+          --hidden-import yt_dlp.extractor
+          --hidden-import yt_dlp.postprocessor
+          --product-name "Descargador de Videos POD"
+          --product-version "2.0.0"
+          --file-version "2.0.0"
+          --company-name "Proyecto Ola Digital"
+          --copyright "2026 Proyecto Ola Digital"
+          --file-description "Descargador de Videos - Proyecto Ola Digital"
+          --no-onefile
+        shell: pwsh
+
+      - name: Comprimir carpeta completa
         run: |
-          import urllib.request, zipfile, os, tempfile, sys, subprocess
-
-          # 1. Descargar y cachear el runtime de Flet
-          flet_cache = os.path.join(os.path.expanduser('~'), '.flet', 'client',
-                                    'flet-desktop-full-0.84.0', 'flet')
-          os.makedirs(flet_cache, exist_ok=True)
-          if not os.listdir(flet_cache):
-              url = 'https://github.com/flet-dev/flet/releases/download/v0.84.0/flet-windows.zip'
-              tmp = os.path.join(tempfile.gettempdir(), 'flet-windows.zip')
-              print('Descargando runtime Flet...')
-              urllib.request.urlretrieve(url, tmp)
-              with zipfile.ZipFile(tmp) as z:
-                  z.extractall(flet_cache)
-              print(f'Runtime extraido: {os.listdir(flet_cache)[:5]}')
-
-          # 2. Parchear flet_cli para que NO borre el directorio temporal
-          import flet_cli.__pyinstaller.config as hook_config
-          _orig_rmtree = None
-          import shutil
-          _orig_rmtree = shutil.rmtree
-          def _no_rmtree(path, **kwargs):
-              if hook_config.temp_bin_dir and path == hook_config.temp_bin_dir:
-                  print(f'[PATCH] Evitando borrado de: {path}')
-                  return
-              _orig_rmtree(path, **kwargs)
-          shutil.rmtree = _no_rmtree
-
-          # 3. Llamar flet pack via subprocess con el entorno parcheado
-          # (el parche solo aplica en este proceso, flet pack corre en subproceso)
-          # Mejor: usar copy_flet_bin directamente y luego PyInstaller
-          from flet_cli.__pyinstaller.utils import copy_flet_bin, get_flet_bin_path
-          print('Copiando flet bin...')
-          bin_path = copy_flet_bin()
-          print(f'flet bin copiado en: {bin_path}')
-          hook_config.temp_bin_dir = bin_path
-
-          import PyInstaller.__main__
-          pyi_args = [
-              'main.py', '--noconfirm', '--noconsole',
-              '--icon', 'assets/logo_POD.ico',
-              '--name', 'Descargador_Win64',
-              '--distpath', 'dist',
-              '--add-data', 'assets;assets',
-              '--hidden-import', 'yt_dlp',
-              '--hidden-import', 'yt_dlp.extractor',
-              '--hidden-import', 'yt_dlp.postprocessor',
-              '--onefile',
-          ]
-          print('Ejecutando PyInstaller...')
-          PyInstaller.__main__.run(pyi_args)
-          print('Build completado.')
-
-      - name: Crear zip
-        run: |
-          New-Item -ItemType Directory -Force -Path dist
-          Compress-Archive -Path dist/Descargador_Win64.exe -DestinationPath dist/Descargador_Win64.zip
+          Compress-Archive -Path dist/Descargador_Win64 -DestinationPath dist/Descargador_Win64.zip
         shell: pwsh
 
       - name: Subir artifact
