@@ -28,49 +28,77 @@ jobs:
           pip install requests==2.34.2 urllib3==2.7.0 rich==15.0.0
         shell: pwsh
 
-      - name: Descargar ffmpeg y runtime Flet
+      - name: Descargar ffmpeg
         shell: python
         run: |
           import urllib.request, zipfile, os, tempfile
-          # ffmpeg
           os.makedirs('assets/bin', exist_ok=True)
-          url_ff = 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip'
-          tmp_ff = os.path.join(tempfile.gettempdir(), 'ffmpeg.zip')
+          url = 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip'
+          tmp = os.path.join(tempfile.gettempdir(), 'ffmpeg.zip')
           print('Descargando ffmpeg...')
-          urllib.request.urlretrieve(url_ff, tmp_ff)
-          with zipfile.ZipFile(tmp_ff) as z:
+          urllib.request.urlretrieve(url, tmp)
+          with zipfile.ZipFile(tmp) as z:
               for n in z.namelist():
                   if n.endswith('bin/ffmpeg.exe') or n.endswith('bin/ffprobe.exe'):
                       exe = os.path.basename(n)
                       with z.open(n) as s, open(os.path.join('assets','bin',exe), 'wb') as d:
                           d.write(s.read())
                       print(f'  {exe}: OK')
-          # runtime Flet para incluir en bundle
-          os.makedirs('flet-runtime', exist_ok=True)
-          url_flet = 'https://github.com/flet-dev/flet/releases/download/v0.84.0/flet-windows.zip'
-          dst_flet = os.path.join('flet-runtime', 'flet-windows.zip')
-          print('Descargando runtime Flet...')
-          urllib.request.urlretrieve(url_flet, dst_flet)
-          print(f'  flet-windows.zip: {os.path.getsize(dst_flet)//1024//1024} MB OK')
 
-      - name: Empaquetar con flet pack
-        run: >
-          flet pack main.py
-          --name Descargador_Win64
-          --distpath dist
-          --icon assets/logo_POD.ico
-          --add-data "assets;assets"
-          --add-data "flet-runtime;flet-runtime"
-          --hidden-import yt_dlp
-          --hidden-import yt_dlp.extractor
-          --hidden-import yt_dlp.postprocessor
-          --product-name "Descargador de Videos POD"
-          --product-version "2.0.0"
-          --file-version "2.0.0"
-          --company-name "Proyecto Ola Digital"
-          --copyright "2026 Proyecto Ola Digital"
-          --file-description "Descargador de Videos - Proyecto Ola Digital"
-        shell: pwsh
+      - name: Pre-cachear runtime Flet y empaquetar
+        shell: python
+        run: |
+          import urllib.request, zipfile, os, tempfile, sys, subprocess
+
+          # 1. Descargar y cachear el runtime de Flet
+          flet_cache = os.path.join(os.path.expanduser('~'), '.flet', 'client',
+                                    'flet-desktop-full-0.84.0', 'flet')
+          os.makedirs(flet_cache, exist_ok=True)
+          if not os.listdir(flet_cache):
+              url = 'https://github.com/flet-dev/flet/releases/download/v0.84.0/flet-windows.zip'
+              tmp = os.path.join(tempfile.gettempdir(), 'flet-windows.zip')
+              print('Descargando runtime Flet...')
+              urllib.request.urlretrieve(url, tmp)
+              with zipfile.ZipFile(tmp) as z:
+                  z.extractall(flet_cache)
+              print(f'Runtime extraido: {os.listdir(flet_cache)[:5]}')
+
+          # 2. Parchear flet_cli para que NO borre el directorio temporal
+          import flet_cli.__pyinstaller.config as hook_config
+          _orig_rmtree = None
+          import shutil
+          _orig_rmtree = shutil.rmtree
+          def _no_rmtree(path, **kwargs):
+              if hook_config.temp_bin_dir and path == hook_config.temp_bin_dir:
+                  print(f'[PATCH] Evitando borrado de: {path}')
+                  return
+              _orig_rmtree(path, **kwargs)
+          shutil.rmtree = _no_rmtree
+
+          # 3. Llamar flet pack via subprocess con el entorno parcheado
+          # (el parche solo aplica en este proceso, flet pack corre en subproceso)
+          # Mejor: usar copy_flet_bin directamente y luego PyInstaller
+          from flet_cli.__pyinstaller.utils import copy_flet_bin, get_flet_bin_path
+          print('Copiando flet bin...')
+          bin_path = copy_flet_bin()
+          print(f'flet bin copiado en: {bin_path}')
+          hook_config.temp_bin_dir = bin_path
+
+          import PyInstaller.__main__
+          pyi_args = [
+              'main.py', '--noconfirm', '--noconsole',
+              '--icon', 'assets/logo_POD.ico',
+              '--name', 'Descargador_Win64',
+              '--distpath', 'dist',
+              '--add-data', 'assets;assets',
+              '--hidden-import', 'yt_dlp',
+              '--hidden-import', 'yt_dlp.extractor',
+              '--hidden-import', 'yt_dlp.postprocessor',
+              '--onefile',
+          ]
+          print('Ejecutando PyInstaller...')
+          PyInstaller.__main__.run(pyi_args)
+          print('Build completado.')
 
       - name: Crear zip
         run: |
